@@ -13,6 +13,7 @@ data class CliArgs(
     val targetDate: String? = null,
     val isVerbose: Boolean = false,
     val isHelpRequested: Boolean = false,
+    val isVersionRequested: Boolean = false,
     val parsingError: String? = null
 )
 
@@ -21,6 +22,8 @@ data class CliArgs(
  */
 object CliParser {
 
+    const val APP_VERSION = "1.0.0"
+
     fun parse(args: Array<String>): CliArgs {
         var apiKey: String? = null
         var cities: List<String>? = null
@@ -28,6 +31,7 @@ object CliParser {
         var targetDate: String? = null
         var isVerbose = false
         var isHelpRequested = false
+        var isVersionRequested = false
         val parsingErrors = mutableListOf<String>()
 
         var i = 0
@@ -36,6 +40,9 @@ object CliParser {
             when {
                 arg == "-h" || arg == "--help" -> {
                     isHelpRequested = true
+                }
+                arg == "-V" || arg == "--version" -> {
+                    isVersionRequested = true
                 }
                 arg == "-v" || arg == "--verbose" -> {
                     isVerbose = true
@@ -52,15 +59,13 @@ object CliParser {
                 }
                 arg == "-c" || arg == "--cities" -> {
                     if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
-                        val parsed = args[++i].split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                        cities = parsed.ifEmpty { null }
+                        cities = parseCitiesCsv(args[++i]).ifEmpty { null }
                     } else {
                         parsingErrors.add("Missing value for --cities argument")
                     }
                 }
                 arg.startsWith("--cities=") -> {
-                    val parsed = arg.substringAfter("--cities=").split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                    cities = parsed.ifEmpty { null }
+                    cities = parseCitiesCsv(arg.substringAfter("--cities=")).ifEmpty { null }
                 }
                 arg == "-d" || arg == "--days" -> {
                     if (i + 1 < args.size && (!args[i + 1].startsWith("-") || args[i + 1].toIntOrNull() != null)) {
@@ -113,8 +118,40 @@ object CliParser {
             targetDate = targetDate,
             isVerbose = isVerbose,
             isHelpRequested = isHelpRequested,
+            isVersionRequested = isVersionRequested,
             parsingError = parsingErrors.joinToString("; ").takeIf { it.isNotEmpty() }
         )
+    }
+
+    /**
+     * Splits comma-separated city arguments respecting double quotes to support
+     * geographical names containing commas (e.g. "Washington, DC", "Kyiv").
+     */
+    fun parseCitiesCsv(input: String): List<String> {
+        val result = mutableListOf<String>()
+        val current = StringBuilder()
+        var inQuotes = false
+
+        for (char in input) {
+            when (char) {
+                '"' -> inQuotes = !inQuotes
+                ',' -> {
+                    if (inQuotes) {
+                        current.append(char)
+                    } else {
+                        val token = current.toString().trim()
+                        if (token.isNotEmpty()) result.add(token)
+                        current.setLength(0)
+                    }
+                }
+                else -> current.append(char)
+            }
+        }
+        val lastToken = current.toString().trim()
+        if (lastToken.isNotEmpty()) {
+            result.add(lastToken)
+        }
+        return result
     }
 
     private fun validateIsoDate(rawDate: String, errors: MutableList<String>): String? {
@@ -130,8 +167,8 @@ object CliParser {
     fun printHelp(out: java.io.PrintStream = System.out) {
         out.println(
             """
-            WeatherAPI Next-Day Forecast CLI
-            ================================
+            WeatherAPI Next-Day Forecast CLI (v$APP_VERSION)
+            ==============================================
             Retrieves and displays the next-day weather forecast for:
             Chisinau, Madrid, Kyiv, and Amsterdam.
 
@@ -145,11 +182,16 @@ object CliParser {
               -d, --days <DAYS>       Number of forecast days to fetch (2 to 14, default: 3 for cross-timezone coverage)
                   --date <YYYY-MM-DD> Explicit target forecast date to display
               -v, --verbose           Enable verbose HTTP logging with sanitized secrets
+              -V, --version           Show application version and exit
               -h, --help              Show this help message and exit
 
             ENVIRONMENT VARIABLES:
               WEATHER_API_KEY         WeatherAPI API key
             """.trimIndent()
         )
+    }
+
+    fun printVersion(out: java.io.PrintStream = System.out) {
+        out.println("WeatherAPI Forecast CLI version $APP_VERSION")
     }
 }

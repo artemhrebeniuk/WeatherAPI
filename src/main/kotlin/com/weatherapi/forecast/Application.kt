@@ -62,6 +62,11 @@ private fun executeApplication(
         return 0
     }
 
+    if (cliArgs.isVersionRequested) {
+        CliParser.printVersion(stdout)
+        return 0
+    }
+
     if (cliArgs.parsingError != null) {
         stderr.println("[ERROR] ${cliArgs.parsingError}")
         return 1

@@ -150,4 +150,34 @@ class CliParserTest {
         val parsedLong = CliParser.parse(argsLong)
         assertTrue(parsedLong.isVerbose)
     }
+
+    @Test
+    fun `parse detects version flag`() {
+        val argsShort = arrayOf("-V")
+        val parsedShort = CliParser.parse(argsShort)
+        assertTrue(parsedShort.isVersionRequested)
+
+        val argsLong = arrayOf("--version")
+        val parsedLong = CliParser.parse(argsLong)
+        assertTrue(parsedLong.isVersionRequested)
+    }
+
+    @Test
+    fun `parse correctly parses quoted cities containing commas`() {
+        val args = arrayOf("--cities=\"Washington, DC\", Madrid, \"Frankfurt am Main, Germany\", Kyiv")
+        val parsed = CliParser.parse(args)
+
+        assertEquals(
+            listOf("Washington, DC", "Madrid", "Frankfurt am Main, Germany", "Kyiv"),
+            parsed.cities
+        )
+    }
+
+    @Test
+    fun `parseCitiesCsv handles unquoted, quoted, and trailing commas gracefully`() {
+        val input = "London, \"New York, NY\",, Tokyo,"
+        val result = CliParser.parseCitiesCsv(input)
+
+        assertEquals(listOf("London", "New York, NY", "Tokyo"), result)
+    }
 }

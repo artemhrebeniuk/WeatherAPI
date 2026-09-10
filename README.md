@@ -64,6 +64,7 @@ Options:
   -d, --days <DAYS>       Forecast query depth between 2 and 14 days (default: 3)
       --date <YYYY-MM-DD> Explicit target forecast date to display
   -v, --verbose           Enable verbose HTTP logging with sanitized secrets
+  -V, --version           Show application version and exit
   -h, --help              Show usage help and exit
 ```
 

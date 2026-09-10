@@ -37,6 +37,19 @@ class ApplicationTest {
     }
 
     @Test
+    fun `runApplication returns 0 and prints version when version requested`() {
+        val outBytes = ByteArrayOutputStream()
+        val errBytes = ByteArrayOutputStream()
+        val stdout = PrintStream(outBytes)
+        val stderr = PrintStream(errBytes)
+
+        val code = runApplication(arrayOf("--version"), stdout, stderr, emptyEnvProvider)
+
+        assertEquals(0, code)
+        assertTrue(outBytes.toString().contains("WeatherAPI Forecast CLI version 1.0.0"))
+    }
+
+    @Test
     fun `runApplication returns 1 and writes to stderr on parsing error`() {
         val outBytes = ByteArrayOutputStream()
         val errBytes = ByteArrayOutputStream()
