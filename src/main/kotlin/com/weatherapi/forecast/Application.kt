@@ -1,11 +1,13 @@
 package com.weatherapi.forecast
 
 import com.weatherapi.forecast.common.config.AppConfig
+import com.weatherapi.forecast.common.config.EnvironmentProvider
 import com.weatherapi.forecast.data.remote.api.WeatherApiService
 import com.weatherapi.forecast.data.remote.interceptor.ApiKeyInterceptor
 import com.weatherapi.forecast.data.remote.interceptor.RetryInterceptor
 import com.weatherapi.forecast.data.remote.interceptor.SanitizedHttpLoggingInterceptor
 import com.weatherapi.forecast.data.repository.WeatherRepositoryImpl
+import com.weatherapi.forecast.domain.repository.WeatherRepository
 import com.weatherapi.forecast.domain.usecase.GetForecastUseCase
 import com.weatherapi.forecast.presentation.cli.CliParser
 import com.weatherapi.forecast.presentation.formatter.FormatForecastTableUseCase
@@ -34,10 +36,12 @@ fun main(args: Array<String>) {
 fun runApplication(
     args: Array<String>,
     stdout: PrintStream = System.out,
-    stderr: PrintStream = System.err
+    stderr: PrintStream = System.err,
+    envProvider: EnvironmentProvider = EnvironmentProvider.SYSTEM,
+    repositoryOverride: WeatherRepository? = null
 ): Int {
     return try {
-        executeApplication(args, stdout, stderr)
+        executeApplication(args, stdout, stderr, envProvider, repositoryOverride)
     } catch (t: Throwable) {
         stderr.println("[FATAL] An unhandled error occurred: ${t.localizedMessage ?: t.javaClass.simpleName}")
         1
@@ -47,7 +51,9 @@ fun runApplication(
 private fun executeApplication(
     args: Array<String>,
     stdout: PrintStream,
-    stderr: PrintStream
+    stderr: PrintStream,
+    envProvider: EnvironmentProvider,
+    repositoryOverride: WeatherRepository?
 ): Int {
     val cliArgs = CliParser.parse(args)
 
@@ -61,7 +67,7 @@ private fun executeApplication(
         return 1
     }
 
-    val resolvedApiKey = AppConfig.resolveApiKey(cliArgs.apiKey)
+    val resolvedApiKey = AppConfig.resolveApiKey(cliArgs.apiKey, envProvider)
     if (resolvedApiKey.isNullOrBlank()) {
         stderr.println(
             """
@@ -77,9 +83,9 @@ private fun executeApplication(
         return 1
     }
 
-    // Sanitize and deduplicate requested cities to protect quota and prevent duplicate table rows
+    // Sanitize and deduplicate requested cities (case-insensitive) to protect quota and prevent duplicate table rows
     val rawCities = cliArgs.cities ?: AppConfig.DEFAULT_CITIES
-    val targetCities = rawCities.distinct()
+    val targetCities = rawCities.map { it.trim() }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }
 
     val config = AppConfig(
         apiKey = resolvedApiKey,
@@ -102,14 +108,16 @@ private fun executeApplication(
         .build()
 
     return try {
-        val retrofit = Retrofit.Builder()
-            .baseUrl(config.baseUrl)
-            .client(okHttpClient)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
+        val weatherRepository = repositoryOverride ?: run {
+            val retrofit = Retrofit.Builder()
+                .baseUrl(config.baseUrl)
+                .client(okHttpClient)
+                .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+                .build()
 
-        val apiService = retrofit.create(WeatherApiService::class.java)
-        val weatherRepository = WeatherRepositoryImpl(apiService, json)
+            val apiService = retrofit.create(WeatherApiService::class.java)
+            WeatherRepositoryImpl(apiService, json)
+        }
         val getForecastUseCase = GetForecastUseCase(weatherRepository)
         val formatTableUseCase = FormatForecastTableUseCase()
 

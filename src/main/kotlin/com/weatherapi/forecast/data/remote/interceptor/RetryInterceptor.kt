@@ -8,21 +8,34 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /**
+ * Abstraction for thread suspension during backoff, allowing tests
+ * to execute instantly without blocking real wall-clock time.
+ */
+fun interface Sleeper {
+    fun sleep(millis: Long)
+
+    companion object {
+        val DEFAULT: Sleeper = Sleeper { Thread.sleep(it) }
+    }
+}
+
+/**
  * Resilient OkHttp interceptor that automatically retries failed network requests
- * on transient server outages (HTTP 502, 503, 504) with exponential backoff
+ * on transient server outages (HTTP 408, 500, 502, 503, 504) with exponential backoff
  * and Full Jitter, closing response bodies promptly to avoid connection pool starvation.
  */
 class RetryInterceptor(
     private val maxRetries: Int = DEFAULT_MAX_RETRIES,
     private val initialDelayMs: Long = DEFAULT_INITIAL_DELAY_MS,
-    private val maxDelayMs: Long = DEFAULT_MAX_DELAY_MS
+    private val maxDelayMs: Long = DEFAULT_MAX_DELAY_MS,
+    private val sleeper: Sleeper = Sleeper.DEFAULT
 ) : Interceptor {
 
     companion object {
         const val DEFAULT_MAX_RETRIES = 3
         const val DEFAULT_INITIAL_DELAY_MS = 300L
         const val DEFAULT_MAX_DELAY_MS = 3000L
-        private val RETRYABLE_HTTP_CODES = setOf(502, 503, 504)
+        private val RETRYABLE_HTTP_CODES = setOf(408, 500, 502, 503, 504)
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -58,7 +71,7 @@ class RetryInterceptor(
         val sleepTimeMs = if (exponentialCap <= 10L) 10L else ThreadLocalRandom.current().nextLong(10L, exponentialCap + 1L)
 
         try {
-            Thread.sleep(sleepTimeMs)
+            sleeper.sleep(sleepTimeMs)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             throw IOException("HTTP request retry interrupted")

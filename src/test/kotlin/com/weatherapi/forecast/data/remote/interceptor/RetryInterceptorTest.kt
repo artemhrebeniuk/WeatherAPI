@@ -78,6 +78,40 @@ class RetryInterceptorTest {
     }
 
     @Test
+    fun `retries on 500 internal server error and succeeds`() {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("Internal Server Error"))
+        server.enqueue(MockResponse().setResponseCode(200).setBody("Recovered"))
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor(RetryInterceptor(maxRetries = 2, initialDelayMs = 10L, sleeper = { /* no-op */ }))
+            .build()
+
+        val request = Request.Builder().url(server.url("/test")).build()
+        val response = client.newCall(request).execute()
+
+        assertEquals(200, response.code)
+        assertEquals("Recovered", response.body?.string())
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun `retries on 408 request timeout and succeeds`() {
+        server.enqueue(MockResponse().setResponseCode(408).setBody("Request Timeout"))
+        server.enqueue(MockResponse().setResponseCode(200).setBody("Recovered"))
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor(RetryInterceptor(maxRetries = 2, initialDelayMs = 10L, sleeper = { /* no-op */ }))
+            .build()
+
+        val request = Request.Builder().url(server.url("/test")).build()
+        val response = client.newCall(request).execute()
+
+        assertEquals(200, response.code)
+        assertEquals("Recovered", response.body?.string())
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
     fun `sanitizes sensitive key in HTTP logs`() {
         val originalErr = System.err
         val errBuffer = ByteArrayOutputStream()

@@ -8,6 +8,22 @@ package com.weatherapi.forecast.common.config
  * 2. Environment variables (WEATHER_API_KEY)
  * 3. System properties (weather.api.key)
  */
+/**
+ * Provider interface abstracting environment variables and system properties
+ * to allow deterministic, hermetic unit testing without mutating global JVM state.
+ */
+interface EnvironmentProvider {
+    fun getEnv(name: String): String?
+    fun getProperty(name: String): String?
+
+    companion object {
+        val SYSTEM: EnvironmentProvider = object : EnvironmentProvider {
+            override fun getEnv(name: String): String? = System.getenv(name)
+            override fun getProperty(name: String): String? = System.getProperty(name)
+        }
+    }
+}
+
 data class AppConfig(
     val apiKey: String,
     val baseUrl: String = DEFAULT_BASE_URL,
@@ -27,12 +43,18 @@ data class AppConfig(
         const val PROP_API_KEY: String = "weather.api.key"
 
         /**
-         * Resolves the API key from CLI arguments, environment variable, or system property.
+         * Resolves the API key with cascading priority:
+         * 1. CLI argument
+         * 2. Environment variable (WEATHER_API_KEY)
+         * 3. System property (weather.api.key)
          */
-        fun resolveApiKey(cliApiKey: String?): String? {
+        fun resolveApiKey(
+            cliApiKey: String?,
+            envProvider: EnvironmentProvider = EnvironmentProvider.SYSTEM
+        ): String? {
             return cliApiKey?.takeIf { it.isNotBlank() }
-                ?: System.getenv(ENV_API_KEY)?.takeIf { it.isNotBlank() }
-                ?: System.getProperty(PROP_API_KEY)?.takeIf { it.isNotBlank() }
+                ?: envProvider.getEnv(ENV_API_KEY)?.takeIf { it.isNotBlank() }
+                ?: envProvider.getProperty(PROP_API_KEY)?.takeIf { it.isNotBlank() }
         }
     }
 }
