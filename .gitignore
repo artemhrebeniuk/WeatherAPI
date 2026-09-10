@@ -1,0 +1,23 @@
+# Gradle and Kotlin build artifacts
+.gradle/
+build/
+.kotlin/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Logs and environment
+*.log
+.env
+local.properties

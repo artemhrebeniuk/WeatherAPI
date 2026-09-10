@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build and Run Tests
+        run: ./gradlew check --info
+
+      - name: Verify CLI Help Execution
+        run: ./gradlew run --args="--help" --quiet
+
+      - name: Build and Verify Executable Fat JAR
+        run: |
+          ./gradlew jar
+          java -jar build/libs/weather-forecast.jar --help
