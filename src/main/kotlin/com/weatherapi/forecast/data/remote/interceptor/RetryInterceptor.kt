@@ -9,8 +9,8 @@ import kotlin.math.pow
 
 /**
  * Resilient OkHttp interceptor that automatically retries failed network requests
- * on transient server outages (HTTP 502, 503, 504) or rate limits (HTTP 429)
- * with exponential backoff and Full Jitter to mitigate thundering herd spikes.
+ * on transient server outages (HTTP 502, 503, 504) with exponential backoff
+ * and Full Jitter, closing response bodies promptly to avoid connection pool starvation.
  */
 class RetryInterceptor(
     private val maxRetries: Int = DEFAULT_MAX_RETRIES,
@@ -22,40 +22,46 @@ class RetryInterceptor(
         const val DEFAULT_MAX_RETRIES = 3
         const val DEFAULT_INITIAL_DELAY_MS = 300L
         const val DEFAULT_MAX_DELAY_MS = 3000L
-        private val RETRYABLE_HTTP_CODES = setOf(429, 502, 503, 504)
+        private val RETRYABLE_HTTP_CODES = setOf(502, 503, 504)
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        var response: Response? = null
         var lastException: IOException? = null
 
         for (attempt in 0..maxRetries) {
+            val response: Response
             try {
-                response?.close()
                 response = chain.proceed(request)
-
-                // Return immediately if response is not a transient server error or if retries exhausted
-                if (response.code !in RETRYABLE_HTTP_CODES || attempt == maxRetries) {
-                    return response
-                }
             } catch (ioe: IOException) {
                 lastException = ioe
                 if (attempt == maxRetries) throw ioe
+                performBackoff(attempt)
+                continue
             }
 
-            // Exponential backoff with Full Jitter: uniform_random(10, min(maxDelay, initialDelay * 2^attempt))
-            val exponentialCap = min(maxDelayMs, (initialDelayMs * 2.0.pow(attempt.toDouble())).toLong())
-            val sleepTimeMs = if (exponentialCap <= 10L) 10L else ThreadLocalRandom.current().nextLong(10L, exponentialCap + 1L)
-
-            try {
-                Thread.sleep(sleepTimeMs)
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                throw lastException ?: IOException("Request retry interrupted")
+            // If success, non-retryable status, or retries exhausted, return response immediately
+            if (response.code !in RETRYABLE_HTTP_CODES || attempt == maxRetries) {
+                return response
             }
+
+            // CRITICAL: Explicitly close response body BEFORE sleeping to avoid connection starvation
+            response.close()
+            performBackoff(attempt)
         }
 
-        return response ?: throw (lastException ?: IOException("Failed after $maxRetries retries"))
+        throw (lastException ?: IOException("Failed to execute request after $maxRetries retries"))
+    }
+
+    private fun performBackoff(attempt: Int) {
+        val exponentialCap = min(maxDelayMs, (initialDelayMs * 2.0.pow(attempt.toDouble())).toLong())
+        val sleepTimeMs = if (exponentialCap <= 10L) 10L else ThreadLocalRandom.current().nextLong(10L, exponentialCap + 1L)
+
+        try {
+            Thread.sleep(sleepTimeMs)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw IOException("HTTP request retry interrupted")
+        }
     }
 }

@@ -29,11 +29,25 @@ fun main(args: Array<String>) {
 /**
  * Testable application entry point that returns an integer exit code
  * without calling [exitProcess], permitting in-memory integration testing.
+ * Protected by a top-level exception trap to guard against uncaught runtime panics.
  */
 fun runApplication(
     args: Array<String>,
     stdout: PrintStream = System.out,
     stderr: PrintStream = System.err
+): Int {
+    return try {
+        executeApplication(args, stdout, stderr)
+    } catch (t: Throwable) {
+        stderr.println("[FATAL] An unhandled error occurred: ${t.localizedMessage ?: t.javaClass.simpleName}")
+        1
+    }
+}
+
+private fun executeApplication(
+    args: Array<String>,
+    stdout: PrintStream,
+    stderr: PrintStream
 ): Int {
     val cliArgs = CliParser.parse(args)
 

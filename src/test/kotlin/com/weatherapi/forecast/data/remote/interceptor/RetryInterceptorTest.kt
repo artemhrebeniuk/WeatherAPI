@@ -62,6 +62,22 @@ class RetryInterceptorTest {
     }
 
     @Test
+    fun `does not retry on 429 quota or rate limit exceeded`() {
+        server.enqueue(MockResponse().setResponseCode(429).setBody("Rate limit exceeded"))
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor(RetryInterceptor(maxRetries = 2, initialDelayMs = 10L))
+            .build()
+
+        val request = Request.Builder().url(server.url("/test")).build()
+        val response = client.newCall(request).execute()
+
+        assertEquals(429, response.code)
+        assertEquals(1, server.requestCount)
+        response.close()
+    }
+
+    @Test
     fun `sanitizes sensitive key in HTTP logs`() {
         val originalErr = System.err
         val errBuffer = ByteArrayOutputStream()

@@ -112,6 +112,11 @@ class WeatherRepositoryImpl(
         return mapApiError(city, httpCode, apiCode, apiMsg, ex)
     }
 
+    companion object {
+        private val INVALID_KEY_HTTP_CODES = setOf(401, 403)
+        private val INVALID_KEY_API_CODES = setOf(1002, 2006, 2008, 2009)
+    }
+
     private fun mapApiError(
         city: String,
         httpCode: Int?,
@@ -125,7 +130,7 @@ class WeatherRepositoryImpl(
                 message = "Rate limit or quota exceeded" + (httpCode?.let { " (HTTP $it)" } ?: "") + ": $safeMsg",
                 cause = cause
             )
-            httpCode in listOf(401, 403) || apiCode in listOf(1002, 2006, 2008, 2009) -> WeatherError.InvalidApiKey(
+            httpCode in INVALID_KEY_HTTP_CODES || apiCode in INVALID_KEY_API_CODES -> WeatherError.InvalidApiKey(
                 message = "Authentication failed" + (httpCode?.let { " (HTTP $it)" } ?: "") + ": $safeMsg",
                 cause = cause
             )
