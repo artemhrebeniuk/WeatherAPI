@@ -60,6 +60,15 @@ class CliParserTest {
     }
 
     @Test
+    fun `parse flags missing value when option is followed by another option flag`() {
+        val args = arrayOf("--api-key", "-v")
+        val parsed = CliParser.parse(args)
+
+        val error = requireNotNull(parsed.parsingError)
+        assertTrue(error.contains("Missing value for --api-key argument"))
+    }
+
+    @Test
     fun `parse aggregates multiple errors together`() {
         val args = arrayOf("--days=abc", "--unknown-opt")
         val parsed = CliParser.parse(args)

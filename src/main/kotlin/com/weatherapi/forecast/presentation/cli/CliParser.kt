@@ -41,7 +41,7 @@ object CliParser {
                     isVerbose = true
                 }
                 arg == "-k" || arg == "--api-key" -> {
-                    if (i + 1 < args.size) {
+                    if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
                         apiKey = args[++i]
                     } else {
                         parsingErrors.add("Missing value for --api-key argument")
@@ -51,7 +51,7 @@ object CliParser {
                     apiKey = arg.substringAfter("--api-key=")
                 }
                 arg == "-c" || arg == "--cities" -> {
-                    if (i + 1 < args.size) {
+                    if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
                         val parsed = args[++i].split(",").map { it.trim() }.filter { it.isNotEmpty() }
                         cities = parsed.ifEmpty { null }
                     } else {
@@ -63,7 +63,7 @@ object CliParser {
                     cities = parsed.ifEmpty { null }
                 }
                 arg == "-d" || arg == "--days" -> {
-                    if (i + 1 < args.size) {
+                    if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
                         val rawDays = args[++i]
                         val parsed = rawDays.toIntOrNull()
                         if (parsed == null || parsed !in 2..14) {
@@ -85,7 +85,7 @@ object CliParser {
                     }
                 }
                 arg == "--date" -> {
-                    if (i + 1 < args.size) {
+                    if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
                         val rawDate = args[++i]
                         targetDate = validateIsoDate(rawDate, parsingErrors)
                     } else {

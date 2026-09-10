@@ -52,9 +52,15 @@ object WeatherMapper {
         val parsedDate = runCatching { LocalDate.parse(rawDate) }.getOrNull() ?: return null
         val day = dto.day ?: DayDto()
 
-        // 1. Defend symmetrically against null, non-finite and inverted temperatures
-        val rawMin = day.mintempC?.takeIf { it.isFinite() }
-        val rawMax = day.maxtempC?.takeIf { it.isFinite() }
+        // 1. Defend symmetrically against null, non-finite, and inverted temperatures,
+        // using hourly intervals as robust fallback before falling back to absolute zero.
+        val hourlyTemps = dto.hour.mapNotNull { it.tempC?.takeIf { t -> t.isFinite() } }
+        val hourlyMin = hourlyTemps.minOrNull()
+        val hourlyMax = hourlyTemps.maxOrNull()
+
+        val rawMin = day.mintempC?.takeIf { it.isFinite() } ?: hourlyMin
+        val rawMax = day.maxtempC?.takeIf { it.isFinite() } ?: hourlyMax
+
         val fallbackTemp = rawMin ?: rawMax ?: 0.0
         val effectiveMin = rawMin ?: fallbackTemp
         val effectiveMax = rawMax ?: fallbackTemp

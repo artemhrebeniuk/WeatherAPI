@@ -52,7 +52,29 @@ tasks.test {
     }
 }
 
-tasks.withType<Jar> {
+tasks.register<Jar>("fatJar") {
+    group = "build"
+    description = "Assembles an executable fat JAR archive containing all dependencies."
+    archiveBaseName.set("weather-forecast")
+    archiveClassifier.set("")
+    archiveVersion.set("")
+
+    manifest {
+        attributes["Main-Class"] = "com.weatherapi.forecast.ApplicationKt"
+        attributes["Implementation-Title"] = "WeatherAPI Forecast CLI"
+        attributes["Implementation-Version"] = project.version
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+
+    from(sourceSets.main.get().output)
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }) {
+        exclude("META-INF/INDEX.LIST", "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    }
+}
+
+tasks.named<Jar>("jar") {
     archiveBaseName.set("weather-forecast")
     archiveClassifier.set("")
     archiveVersion.set("")
@@ -63,6 +85,8 @@ tasks.withType<Jar> {
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
-    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }) {
+        exclude("META-INF/INDEX.LIST", "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+    }
 }
 

@@ -172,4 +172,29 @@ class WeatherMapperTest {
         assertEquals(0.0, forecast.temperature.minCelsius)
         assertEquals(0.0, forecast.wind.maxSpeedKph)
     }
+
+    @Test
+    fun `toDomain falls back to hourly temperature min and max when day temperatures are null`() {
+        val dto = ForecastResponseDto(
+            location = LocationDto(name = "Madrid"),
+            forecast = ForecastContainerDto(
+                forecastday = listOf(
+                    ForecastDayDto(
+                        date = "2026-09-12",
+                        day = DayDto(mintempC = null, maxtempC = null),
+                        hour = listOf(
+                            HourDto(tempC = 14.5),
+                            HourDto(tempC = 28.0),
+                            HourDto(tempC = 21.0)
+                        )
+                    )
+                )
+            )
+        )
+
+        val cityForecast = WeatherMapper.toDomain("Madrid", dto)
+        val forecast = cityForecast.forecasts.first()
+        assertEquals(14.5, forecast.temperature.minCelsius)
+        assertEquals(28.0, forecast.temperature.maxCelsius)
+    }
 }
