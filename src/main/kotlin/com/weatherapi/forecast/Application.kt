@@ -100,6 +100,10 @@ private fun executeApplication(
     }
 
     val okHttpClient = OkHttpClient.Builder()
+        .dispatcher(okhttp3.Dispatcher().apply {
+            maxRequests = 64
+            maxRequestsPerHost = 16
+        })
         .addInterceptor(RetryInterceptor())
         .addInterceptor(ApiKeyInterceptor(config.apiKey))
         .addInterceptor(SanitizedHttpLoggingInterceptor.create(cliArgs.isVerbose))
@@ -163,7 +167,9 @@ private fun executeApplication(
                 targetDate = cliArgs.targetDate
             )
             stdout.println(formattedTable)
-            0
+
+            // Return exit code 2 on partial degradation so automation scripts can detect missing cities
+            if (batchResult.failures.isNotEmpty()) 2 else 0
         }
     } finally {
         // Guaranteed resource release: shutdown thread pools and clear connection pool

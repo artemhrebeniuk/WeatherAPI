@@ -153,4 +153,46 @@ class ApplicationTest {
         assertEquals(0, code)
         assertEquals(listOf("Kyiv"), requestedCities)
     }
+
+    @Test
+    fun `runApplication returns 2 on partial failure when some cities fail`() {
+        val outBytes = ByteArrayOutputStream()
+        val errBytes = ByteArrayOutputStream()
+        val stdout = PrintStream(outBytes)
+        val stderr = PrintStream(errBytes)
+
+        val mockRepo = object : WeatherRepository {
+            override suspend fun getForecast(city: String, days: Int): Result<CityForecast> {
+                if (city == "NonExistentCity") {
+                    return Result.failure(com.weatherapi.forecast.common.error.WeatherError.CityNotFound(city))
+                }
+                val forecast = DateForecast(
+                    date = "2026-09-11",
+                    temperature = Temperature(10.0, 20.0),
+                    humidity = Humidity(50),
+                    wind = Wind(15.0, "NW")
+                )
+                return Result.success(
+                    CityForecast(
+                        city = City(name = city),
+                        localDate = LocalDate.parse("2026-09-10"),
+                        forecasts = listOf(forecast)
+                    )
+                )
+            }
+        }
+
+        val code = runApplication(
+            args = arrayOf("--api-key=dummy_key", "--cities=Chisinau,NonExistentCity"),
+            stdout = stdout,
+            stderr = stderr,
+            envProvider = emptyEnvProvider,
+            repositoryOverride = mockRepo
+        )
+
+        assertEquals(2, code)
+        assertTrue(outBytes.toString().contains("Chisinau"))
+        assertTrue(errBytes.toString().contains("[WARNING] Some cities could not be retrieved:"))
+        assertTrue(errBytes.toString().contains("NonExistentCity"))
+    }
 }

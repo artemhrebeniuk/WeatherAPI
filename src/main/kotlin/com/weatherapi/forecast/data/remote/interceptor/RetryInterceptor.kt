@@ -84,6 +84,11 @@ class RetryInterceptor(
             is java.net.ConnectException -> true
             is java.net.UnknownHostException,
             is javax.net.ssl.SSLException -> false
+            is java.net.SocketException -> {
+                // Catches transient socket drops: "Connection reset", "Software caused connection abort", "Broken pipe"
+                val msg = ioe.message?.lowercase().orEmpty()
+                msg.contains("reset") || msg.contains("abort") || msg.contains("broken pipe")
+            }
             else -> ioe.message?.contains("unexpected end of stream", ignoreCase = true) == true
         }
     }

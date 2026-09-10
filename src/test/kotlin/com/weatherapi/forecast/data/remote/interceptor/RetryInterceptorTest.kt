@@ -2,6 +2,7 @@ package com.weatherapi.forecast.data.remote.interceptor
 
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.jupiter.api.AfterEach
@@ -152,5 +153,37 @@ class RetryInterceptorTest {
         }
 
         assertEquals(0, sleepCount, "Should immediately fail without retrying UnknownHostException")
+    }
+
+    @Test
+    fun `retries on transient SocketException like connection reset`() {
+        var callCount = 0
+        var sleepCount = 0
+        val faultyInterceptor = okhttp3.Interceptor { chain ->
+            callCount++
+            if (callCount == 1) {
+                throw java.net.SocketException("Connection reset by peer")
+            }
+            okhttp3.Response.Builder()
+                .request(chain.request())
+                .protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body("Recovered".toResponseBody(null))
+                .build()
+        }
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor(RetryInterceptor(maxRetries = 2, initialDelayMs = 10L, sleeper = { sleepCount++ }))
+            .addInterceptor(faultyInterceptor)
+            .build()
+
+        val request = Request.Builder().url(server.url("/test")).build()
+        val response = client.newCall(request).execute()
+
+        assertEquals(200, response.code)
+        assertEquals(2, callCount)
+        assertEquals(1, sleepCount)
+        response.close()
     }
 }
