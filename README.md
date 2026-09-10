@@ -14,14 +14,23 @@ Results are printed to `STDOUT` as an auto-aligned, two-tier ASCII table with da
 
 ## Quick Start
 
-### Prerequisites
-- JDK 21+ installed and available on `PATH`.
-- A valid API key from [WeatherAPI.com](https://www.weatherapi.com/).
-
-### Running the Application
+### 1. Clone & Navigate
 
 ```bash
-# Option 1: Pass API key directly via CLI flag
+git clone https://github.com/artemhrebeniuk/WeatherAPI.git
+cd WeatherAPI
+```
+
+### 2. Prerequisites
+- **JDK 21+** installed and available on `PATH` (verify via `java -version`).
+- A free API key from [WeatherAPI.com](https://www.weatherapi.com/signup.aspx).
+
+### 3. Running the Application
+
+#### macOS / Linux
+
+```bash
+# Option 1: Pass API key directly via CLI argument
 ./gradlew run --args="--api-key=YOUR_API_KEY"
 
 # Option 2: Export as an environment variable
@@ -30,9 +39,29 @@ export WEATHER_API_KEY="YOUR_API_KEY"
 
 # Option 3: Supply via JVM system property
 ./gradlew run -Dweather.api.key="YOUR_API_KEY"
+```
 
-# Option 4: Build and run the standalone executable Fat JAR
-./gradlew jar
+#### Windows (PowerShell / Command Prompt)
+
+```powershell
+# Set console encoding to UTF-8 (recommended for degree symbols)
+chcp 65001
+
+# Option 1: Pass API key directly via CLI argument
+.\gradlew.bat run --args="--api-key=YOUR_API_KEY"
+
+# Option 2: Set environment variable in PowerShell
+$env:WEATHER_API_KEY="YOUR_API_KEY"
+.\gradlew.bat run
+```
+
+#### Standalone Executable JAR (Cross-Platform)
+
+```bash
+# Build the standalone executable fat JAR containing all dependencies
+./gradlew fatJar          # on Windows: .\gradlew.bat fatJar
+
+# Run directly via Java runtime
 java -jar build/libs/weather-forecast.jar --api-key="YOUR_API_KEY"
 ```
 
