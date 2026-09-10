@@ -40,6 +40,8 @@ application {
 }
 
 tasks.withType<JavaExec> {
+    systemProperty("file.encoding", "UTF-8")
+    defaultCharacterEncoding = "UTF-8"
     System.getProperty("weather.api.key")?.let { key ->
         systemProperty("weather.api.key", key)
     }
