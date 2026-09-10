@@ -52,7 +52,7 @@ class GetForecastUseCase(
      * Concurrency is throttled via a [Semaphore] to protect against API rate limits.
      *
      * @param cities List of city names to query.
-     * @param days Number of days for the forecast (default is 2).
+     * @param days Number of days for the forecast (default is 3).
      * @return [ForecastBatchResult] containing successful forecasts and individual failure details.
      */
     suspend fun execute(

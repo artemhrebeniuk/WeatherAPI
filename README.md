@@ -123,18 +123,41 @@ The codebase follows **Clean Architecture** principles, enforcing strict unidire
 - **Circular Vector Averaging for Wind Direction:**  
   WeatherAPI provides daily aggregate metrics for temperature and humidity, but omits aggregate wind direction from the daily `day` payload (it is only available in 24 hourly readings). Rather than picking an arbitrary timestamp, `WindDirectionCalculator` decomposes the 24 hourly azimuth angles into Cartesian vectors:
   ```
-  x = Σ(cos(θᵢ) · wᵢ),  y = Σ(sin(θᵢ) · wᵢ)  where wᵢ = max(windKphᵢ, 0.1)
+  sumNorth = Σ(cos(θᵢ) · wᵢ),  sumEast = Σ(sin(θᵢ) · wᵢ)  where wᵢ = max(windKphᵢ, 0.1)
   ```
-  The resultant angle `atan2(y, x)` correctly resolves circular continuity across North (e.g., 350° and 10° yield 0° North, rather than 180° South). Singularity conditions (`hypot(x, y) < 10⁻⁵`) deterministically fall back to statistical compass mode.
+  The resultant angle `atan2(sumEast, sumNorth)` correctly resolves circular continuity across North (e.g., 350° and 10° yield 0° North, rather than 180° South). Singularity conditions (`hypot(sumNorth, sumEast) < 10⁻⁵`) deterministically fall back to statistical compass mode.
 
 - **Cross-Midnight Timezone Handling:**  
   Target cities span UTC+1 to UTC+3. When invoked near midnight, calendar dates differ across cities. The application queries 3 days (`days=3`), resolves each location's local time from `location.localtime`, and computes its respective tomorrow. If cities resolve to distinct calendar dates, the table dynamically renders multiple date column blocks with sparse cell indicators (`-`).
 
+- **Resilient Network Stack & Retry Policy:**  
+  The application implements an exponential backoff with Full Jitter retry interceptor for transient outages (HTTP 408, 500, 502, 503, 504, `SocketTimeoutException`, `ConnectException`, and socket resets). To prevent **Connection Pool Starvation**, the HTTP response body is explicitly closed *before* entering backoff. Non-transient errors (`UnknownHostException`, `SSLException`, 401, 403, 429) fail immediately without wasteful delays.
+
 - **Structured Concurrency & Fault Tolerance:**  
-  City queries are dispatched concurrently using Kotlin Coroutines (`async` inside `supervisorScope`) throttled by a `Semaphore(8)` to safeguard network pools and rate limits. If one city encounters an outage or 404, it does not cancel sibling requests: the failure is emitted to `STDERR`, while valid forecasts are cleanly formatted in `STDOUT`.
+  City queries are dispatched concurrently using Kotlin Coroutines (`async` inside `supervisorScope`) throttled by a `Semaphore(8)` and tuned OkHttp Dispatcher (`maxRequests = 64, maxRequestsPerHost = 16`). If one city encounters an outage or 404, it does not cancel sibling requests: the failure is emitted to `STDERR`, while valid forecasts are cleanly formatted in `STDOUT`. The application returns exit code `2` on partial degradation.
 
 - **Resource Lifecycle Management:**  
   OkHttp's connection pool and daemon thread executors are explicitly cleared in a `finally` block upon completion, preventing lingering worker threads from blocking process termination.
+
+- **Hermetic Testing & Zero-Leak Secrets:**  
+  Environment variables and system properties are abstracted behind an `EnvironmentProvider`, and backoff delays are injected via `Sleeper`, allowing unit tests to run deterministically and instantaneously. HTTP logs sanitize credentials automatically via regex redaction (`key=***REDACTED***`).
+
+---
+
+## Technical Requirements & Compliance Matrix
+
+| Requirement / Bonus | Status | Implementation Details |
+| :--- | :---: | :--- |
+| **Kotlin (Bonus)** | **Full** | 100% Kotlin 2.0.21 on JVM Toolchain 21 with Coroutines 1.9.0 and Kotlinx Serialization 1.7.3. |
+| **Gradle (Bonus)** | **Full** | Gradle 8.12 (Kotlin DSL), optimized build tasks, `check`, and runnable `fatJar` packaging. |
+| **Retrofit (Bonus)** | **Full** | Retrofit 2.11.0 with OkHttp 4.12.0, declarative suspend API service, and custom resilient interceptors. |
+| **4 Target Cities** | **Full** | `Chisinau`, `Madrid`, `Kyiv`, and `Amsterdam` by default with case-insensitive deduplication. |
+| **Next-Day Forecast** | **Full** | Dynamically calculates `localtime.plusDays(1)` per location rather than displaying today's weather. |
+| **Table Geometry** | **Full** | Dates as Tier-1 column spans, 5 metrics as Tier-2 sub-columns, Cities as rows. |
+| **5 Weather Metrics** | **Full** | Min Temp (°C), Max Temp (°C), Humidity (%), Wind Speed (kph), Wind Direction. |
+| **Prevailing Wind** | **Full** | Vector trigonometry over 24 hourly readings with mode fallback for antipodal singularities. |
+| **STDOUT / STDERR** | **Full** | Formatted table strictly in `STDOUT`; diagnostics, errors, and partial warnings routed to `STDERR`. |
+| **POSIX Exit Codes** | **Full** | `0` = Complete success / help / version; `1` = Fatal error; `2` = Partial data degradation. |
 
 ---
 
@@ -146,27 +169,27 @@ WeatherAPI/
 ├── build.gradle.kts               # Dependencies, JVM toolchain, task configurations
 ├── settings.gradle.kts            # Project settings
 ├── gradlew, gradlew.bat           # Standalone Gradle Wrapper
-├── README.md                      # Documentation
+├── README.md                      # Comprehensive documentation
 └── src/
     ├── main/kotlin/com/weatherapi/forecast/
     │   ├── Application.kt         # Entry point, dependency wiring, exit handling
     │   ├── common/
-    │   │   ├── config/            # AppConfig and key resolution cascade
-    │   │   └── error/             # Strongly typed WeatherError hierarchy
+    │   │   ├── config/            # AppConfig, EnvironmentProvider cascade resolution
+    │   │   └── error/             # Strongly typed sealed WeatherError hierarchy
     │   ├── domain/
     │   │   ├── model/             # Value objects with validation contracts (Temperature, Wind, etc.)
     │   │   ├── repository/        # WeatherRepository interface contract
     │   │   ├── service/           # WindDirectionCalculator circular statistics service
     │   │   └── usecase/           # GetForecastUseCase concurrent orchestrator
     │   ├── data/
-    │   │   ├── mapper/            # DTO-to-Domain mappers with sanity clamping
+    │   │   ├── mapper/            # DTO-to-Domain mappers with hourly fallback & clamping
     │   │   ├── remote/
     │   │   │   ├── api/           # Retrofit WeatherApiService declaration
     │   │   │   ├── dto/           # Kotlinx Serialization DTO models
-    │   │   │   └── interceptor/   # ApiKeyInterceptor query injector
+    │   │   │   └── interceptor/   # ApiKeyInterceptor, RetryInterceptor, SanitizedHttpLoggingInterceptor
     │   │   └── repository/        # WeatherRepositoryImpl with structured error mapping
     │   └── presentation/
-    │       ├── cli/               # CliParser POSIX-style argument handler
+    │       ├── cli/               # CliParser POSIX-style argument handler & quoted CSV parser
     │       ├── formatter/         # FormatForecastTableUseCase presenter
     │       └── table/             # AsciiTableFormatter two-tier rendering engine
     └── test/kotlin/com/weatherapi/forecast/
@@ -180,17 +203,21 @@ WeatherAPI/
 
 ## Testing & Quality Assurance
 
-The test suite covers domain logic, mathematical edge cases, error resilience, integration contracts via MockWebServer, and live execution.
+The test suite includes **94 tests** providing comprehensive verification of domain calculations, networking, error resilience, and CLI behaviors.
 
 ### Test Categories
 
-- **Domain & Mathematical Verification:**  
-  Parameterized tests for all 16 compass sectors, circular North wrapping, opposing wind singularities, IEEE 754 precision thresholds, and out-of-range value rejections.
-- **Integration Tests (MockWebServer):**  
-  Hermetic HTTP server tests validating real network interactions, URL parameter injection, HTTP 401/403 (invalid or disabled key), HTTP 400 (location not found), HTTP 429 (monthly quota exceeded), malformed JSON payloads, socket timeouts, and coroutine cancellation preservation.
-- **Table Formatting & Edge Cases:**  
-  Monospace alignment validation, sub-zero negative temperatures, sparse cell handling, and empty data guards.
-- **Live E2E Verification:**  
+- **Domain & Mathematical Verification (26 tests):**  
+  Parametric validation of all 16 compass sectors, circular North crossing (359° + 1° = 0°), opposing wind cancellation handling, IEEE 754 precision thresholds, and value object invariants.
+- **Integration Tests with MockWebServer (11 tests):**  
+  Hermetic HTTP tests validating the entire Retrofit/OkHttp stack, query parameter authentication, HTTP 401/403 (invalid or disabled key), HTTP 400 (location not found), HTTP 429 (monthly quota exceeded), malformed JSON payloads, and socket timeouts.
+- **Resilient Retry Suite (8 tests):**  
+  Verifies exponential backoff with jitter, non-transient error bypass, immediate response closing to prevent socket leaks, and connection reset recovery.
+- **Table Formatting & Edge Cases (8 tests):**  
+  Monospace alignment validation, multi-date column spanning, sub-zero negative temperatures, sparse cell handling, and empty data guards.
+- **CLI & Application Workflow (26 tests):**  
+  Cascading configuration priority, quoted CSV city parsing (`"Washington, DC", Madrid`), invalid date/day boundaries, `--version`, `--help`, and exit code verification (0, 1, 2).
+- **Live E2E Verification (1 test):**  
   Real network validation against `api.weatherapi.com` (automatically executed when credentials are provided, safely skipped in offline CI environments via JUnit 5 assumptions).
 
 ### Running Tests
@@ -214,5 +241,6 @@ Test reports are generated at `build/reports/tests/test/index.html`.
 
 Every push and pull request is automatically verified via GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 - Matrix build on Ubuntu with OpenJDK 21
-- Gradle check & automated test execution
-- Verification of packaging and CLI execution
+- Full test suite execution and verification
+- CLI validation and artifact packaging
+

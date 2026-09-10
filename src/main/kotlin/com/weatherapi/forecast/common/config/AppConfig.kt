@@ -1,14 +1,6 @@
 package com.weatherapi.forecast.common.config
 
 /**
- * Immutable configuration for the Weather Forecast application.
- *
- * Supports configuration resolution priority:
- * 1. Explicit CLI arguments
- * 2. Environment variables (WEATHER_API_KEY)
- * 3. System properties (weather.api.key)
- */
-/**
  * Provider interface abstracting environment variables and system properties
  * to allow deterministic, hermetic unit testing without mutating global JVM state.
  */
@@ -24,6 +16,14 @@ interface EnvironmentProvider {
     }
 }
 
+/**
+ * Immutable configuration for the Weather Forecast application.
+ *
+ * Supports configuration resolution priority:
+ * 1. Explicit CLI arguments
+ * 2. Environment variables (WEATHER_API_KEY)
+ * 3. System properties (weather.api.key)
+ */
 data class AppConfig(
     val apiKey: String,
     val baseUrl: String = DEFAULT_BASE_URL,
