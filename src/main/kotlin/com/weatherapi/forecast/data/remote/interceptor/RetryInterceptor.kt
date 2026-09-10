@@ -48,7 +48,7 @@ class RetryInterceptor(
                 response = chain.proceed(request)
             } catch (ioe: IOException) {
                 lastException = ioe
-                if (attempt == maxRetries) throw ioe
+                if (attempt == maxRetries || !isTransientNetworkException(ioe)) throw ioe
                 performBackoff(attempt)
                 continue
             }
@@ -75,6 +75,16 @@ class RetryInterceptor(
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             throw IOException("HTTP request retry interrupted")
+        }
+    }
+
+    private fun isTransientNetworkException(ioe: IOException): Boolean {
+        return when (ioe) {
+            is java.net.SocketTimeoutException,
+            is java.net.ConnectException -> true
+            is java.net.UnknownHostException,
+            is javax.net.ssl.SSLException -> false
+            else -> ioe.message?.contains("unexpected end of stream", ignoreCase = true) == true
         }
     }
 }

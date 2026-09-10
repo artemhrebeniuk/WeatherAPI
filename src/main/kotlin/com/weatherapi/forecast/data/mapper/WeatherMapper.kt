@@ -32,7 +32,9 @@ object WeatherMapper {
             country = dto.location?.country
         )
 
-        val localDate = dto.location?.localtime?.substringBefore(" ")?.let { dateStr ->
+        val localDate = dto.location?.localtime?.take(10)?.let { dateStr ->
+            runCatching { LocalDate.parse(dateStr) }.getOrNull()
+        } ?: dto.forecast?.forecastday?.firstOrNull()?.date?.take(10)?.let { dateStr ->
             runCatching { LocalDate.parse(dateStr) }.getOrNull()
         }
 

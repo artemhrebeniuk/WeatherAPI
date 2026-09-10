@@ -63,7 +63,7 @@ object CliParser {
                     cities = parsed.ifEmpty { null }
                 }
                 arg == "-d" || arg == "--days" -> {
-                    if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
+                    if (i + 1 < args.size && (!args[i + 1].startsWith("-") || args[i + 1].toIntOrNull() != null)) {
                         val rawDays = args[++i]
                         val parsed = rawDays.toIntOrNull()
                         if (parsed == null || parsed !in 2..14) {

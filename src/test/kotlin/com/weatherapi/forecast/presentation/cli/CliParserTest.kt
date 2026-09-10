@@ -69,6 +69,15 @@ class CliParserTest {
     }
 
     @Test
+    fun `parse flags negative days correctly without treating it as missing argument`() {
+        val args = arrayOf("-d", "-5")
+        val parsed = CliParser.parse(args)
+
+        val error = requireNotNull(parsed.parsingError)
+        assertTrue(error.contains("Invalid --days value '-5'"))
+    }
+
+    @Test
     fun `parse aggregates multiple errors together`() {
         val args = arrayOf("--days=abc", "--unknown-opt")
         val parsed = CliParser.parse(args)

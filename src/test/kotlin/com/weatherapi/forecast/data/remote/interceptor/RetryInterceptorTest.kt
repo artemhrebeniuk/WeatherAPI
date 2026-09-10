@@ -138,4 +138,19 @@ class RetryInterceptorTest {
             System.setErr(originalErr)
         }
     }
+
+    @Test
+    fun `does not retry on non-transient network exception like UnknownHostException`() {
+        var sleepCount = 0
+        val client = OkHttpClient.Builder()
+            .addInterceptor(RetryInterceptor(maxRetries = 2, initialDelayMs = 10L, sleeper = { sleepCount++ }))
+            .build()
+
+        val request = Request.Builder().url("http://non-existent-domain-xyz-12345.local/test").build()
+        org.junit.jupiter.api.assertThrows<java.net.UnknownHostException> {
+            client.newCall(request).execute()
+        }
+
+        assertEquals(0, sleepCount, "Should immediately fail without retrying UnknownHostException")
+    }
 }

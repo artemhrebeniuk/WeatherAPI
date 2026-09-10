@@ -102,14 +102,14 @@ object WindDirectionCalculator {
      * Computes circular mean angle using meteorological vector decomposition.
      *
      * In navigational coordinates, compass azimuth theta is measured clockwise from North (0°):
-     * - North projection: v = cos(theta) * weight
-     * - East projection:  u = sin(theta) * weight
+     * - North projection (meridional v): v = cos(theta) * weight
+     * - East projection (zonal u):       u = sin(theta) * weight
      *
-     * The mean azimuth is resolved via atan2(u, v) = atan2(sumY, sumX) in degrees [0, 360).
+     * The mean azimuth is resolved via atan2(u, v) = atan2(sumEast, sumNorth) in degrees [0, 360).
      */
     private fun computeVectorAverageDegree(winds: List<HourlyWind>): Double? {
-        var sumX = 0.0
-        var sumY = 0.0
+        var sumNorth = 0.0
+        var sumEast = 0.0
         var count = 0
 
         for ((windKph, windDegree) in winds) {
@@ -118,16 +118,16 @@ object WindDirectionCalculator {
             val radians = Math.toRadians(normalizedDegree)
             val weight = (windKph ?: 1.0).coerceAtLeast(0.1)
 
-            sumX += cos(radians) * weight
-            sumY += sin(radians) * weight
+            sumNorth += cos(radians) * weight
+            sumEast += sin(radians) * weight
             count++
         }
 
-        if (count == 0 || !sumX.isFinite() || !sumY.isFinite() || hypot(sumX, sumY) < EPSILON) {
+        if (count == 0 || !sumNorth.isFinite() || !sumEast.isFinite() || hypot(sumNorth, sumEast) < EPSILON) {
             return null
         }
 
-        val angleRadians = atan2(sumY, sumX)
+        val angleRadians = atan2(sumEast, sumNorth)
         val angleDegrees = Math.toDegrees(angleRadians)
         return ((angleDegrees % 360.0) + 360.0) % 360.0
     }
